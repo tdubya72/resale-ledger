@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Resale Ledger</title>
+<meta name="description" content="Inventory, listings, sales and profit for a resale business.">
+<meta name="theme-color" content="#FFF6F9">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Resale Ledger">
+<meta name="format-detection" content="telephone=no">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" type="image/png" href="icons/favicon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,500;62..125,700;62..125,800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+
+<!-- First run: connect to Supabase (only shown when config.js is empty) -->
+<section class="gate wrap" id="setupView" hidden>
+  <form class="card" id="setupForm" novalidate>
+    <div class="brand"><span class="hole" aria-hidden="true"></span><h1>Resale Ledger</h1></div>
+    <h2>Connect your database</h2>
+    <p>Paste the Project URL and the publishable (or anon) key from your Supabase project's API settings.</p>
+    <label class="f">Project URL<input class="field mono" id="setupUrl" type="url" placeholder="https://abcd1234.supabase.co" autocomplete="off" autocapitalize="off" spellcheck="false" required></label>
+    <label class="f">Publishable or anon key<input class="field mono" id="setupKey" placeholder="sb_publishable_… or eyJ…" autocomplete="off" autocapitalize="off" spellcheck="false" required></label>
+    <span class="err" id="setupErr" hidden></span>
+    <button class="btn primary" type="submit">Connect</button>
+    <p class="fine">Saved on this device only. To set it once for every device, put the same two values in config.js.</p>
+  </form>
+</section>
+
+<!-- Sign in -->
+<section class="gate wrap" id="authView" hidden>
+  <form class="card" id="authForm" novalidate>
+    <div class="brand"><span class="hole" aria-hidden="true"></span><h1>Resale Ledger</h1></div>
+    <h2 id="authTitle">Sign in</h2>
+    <p id="authLead">Use the email and password you set up in Supabase.</p>
+    <label class="f" id="authEmailWrap">Email<input class="field" id="authEmail" type="email" autocomplete="username" autocapitalize="off" required></label>
+    <label class="f" id="authPassWrap">Password<input class="field" id="authPass" type="password" autocomplete="current-password" required></label>
+    <span class="err" id="authErr" hidden></span>
+    <span class="ok" id="authOk" hidden></span>
+    <button class="btn primary" type="submit" id="authGo">Sign in</button>
+    <button class="linkbtn" type="button" id="forgotBtn">Forgot password?</button>
+  </form>
+</section>
+
+<!-- The app -->
+<div id="appView" hidden>
+<header class="top">
+  <div class="wrap">
+    <div class="brand"><span class="hole" aria-hidden="true"></span><h1>Resale Ledger</h1></div>
+    <div class="hbtns">
+      <button class="btn" id="scanBtn" type="button" aria-label="Scan label"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M7 12h10"/></svg><span class="lbltxt">Scan</span></button>
+      <button class="btn" id="labelsBtn" type="button" aria-label="Print labels"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 12V4h8l10 10-8 8z"/><circle cx="7.5" cy="8" r="1.5"/></svg><span class="lbltxt">Labels</span></button>
+      <button class="btn" id="exportBtn" type="button" aria-label="Export CSV"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg><span class="lbltxt">Export</span></button>
+      <button class="btn primary" id="addBtn" type="button">+ Add item</button>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+  <div id="notice" class="notice" hidden></div>
+
+  <section class="kpis" id="kpis" aria-label="Summary"></section>
+
+  <section class="aging" aria-label="Inventory age">
+    <div class="head"><b>Unsold stock by age</b><span id="agingNote"></span></div>
+    <div class="agebar" id="agebar"></div>
+    <div class="agelegend">
+      <span><i class="age0"></i>0–30 days</span><span><i class="age1"></i>31–60</span><span><i class="age2"></i>61–90</span><span><i class="age3"></i>90+ (stale)</span>
+    </div>
+  </section>
+
+  <div class="toolbar">
+    <div class="tabs" role="tablist" id="tabs"></div>
+    <input class="field grow" id="search" type="search" placeholder="Search name, ID, location, site, tracking…" aria-label="Search">
+    <select class="field" id="sort" aria-label="Sort" style="width:auto">
+      <option value="age">Oldest in stock first</option>
+      <option value="newest">Newest purchase first</option>
+      <option value="idnum">Newest ID first</option>
+      <option value="profit">Highest profit first</option>
+      <option value="cost">Highest cost first</option>
+      <option value="name">Name A–Z</option>
+    </select>
+  </div>
+
+  <div class="ledger" id="ledger"></div>
+</main>
+
+<footer class="wrap foot">
+  <span id="whoami"></span>
+  <span><span id="syncState"></span> <button type="button" id="signOutBtn">Sign out</button></span>
+</footer>
+</div>
+
+<dialog class="sheet" id="sheet" aria-labelledby="sheetTitle">
+  <form class="sheet-in" id="form" novalidate>
+    <div class="sheet-head">
+      <h2 id="sheetTitle">New item</h2>
+      <button class="iconbtn" type="button" id="closeBtn" aria-label="Close">✕</button>
+    </div>
+    <div class="sheet-body">
+      <fieldset>
+        <legend>Item</legend>
+        <label class="f s4">Name<input class="field" id="f_name" required placeholder="e.g. Pyrex Butterprint mixing bowl #403"></label>
+        <label class="f s2">Item ID<input class="field mono" id="f_sku" readonly aria-readonly="true" title="Assigned automatically and never changes"></label>
+        <div class="qrbox" id="qrBox" hidden></div>
+        <label class="f s2">Category<input class="field" id="f_category" list="catList" placeholder="Kitchen, Apparel…"></label>
+        <label class="f s2">Condition<select class="field" id="f_condition">
+          <option value="">—</option><option>New with tags</option><option>New without tags</option><option>Like new</option><option>Good</option><option>Fair</option><option>For parts</option>
+        </select></label>
+        <label class="f s2">Storage spot<input class="field" id="f_bin" placeholder="Shelf B, tote 4"></label>
+        <label class="f s6">Notes<textarea class="field" id="f_notes" placeholder="Flaws, measurements, model numbers…"></textarea></label>
+      </fieldset>
+
+      <fieldset>
+        <legend>Purchase</legend>
+        <label class="f s2 half">Date bought<input class="field" type="date" id="f_pdate"></label>
+        <label class="f s2 half">Price paid<input class="field money" type="number" step="0.01" min="0" inputmode="decimal" id="f_pprice" placeholder="0.00"></label>
+        <label class="f s2">Where bought<input class="field" id="f_ploc" list="locList" placeholder="Goodwill on Richmond Rd"></label>
+      </fieldset>
+
+      <fieldset>
+        <legend>Photos</legend>
+        <div class="photos" id="photos"></div>
+        <input type="file" id="photoInput" accept="image/*" multiple hidden>
+        <input type="file" id="cameraInput" accept="image/*" capture="environment" hidden>
+        <div class="err s6" id="photoErr" hidden></div>
+      </fieldset>
+
+      <fieldset id="idSet">
+        <legend>Identify &amp; price</legend>
+        <div class="s6 idrow"><button class="btn ai" type="button" id="identifyBtn"><span class="spark" aria-hidden="true">✦</span> Identify from photos</button><span class="meta" id="idHint">Claude reads your photos, fills in the details, and estimates what it sells for.</span></div>
+        <div class="s6 idout" id="idOut" hidden></div>
+        <div class="s6 comps">
+          <label class="f">Search for sold comps<input class="field" id="f_search" placeholder="Brand, model, pattern…" autocomplete="off"></label>
+          <div class="complinks" id="comps"></div>
+          <span class="fine">Opens real sold listings in a new tab. For Google Lens, tap it and upload the same photo.</span>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Listings</legend>
+        <div class="listings" id="listings"></div>
+        <div class="s6"><button class="btn small" type="button" id="addListing">+ Add listing site</button></div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Sale</legend>
+        <label class="f s2 half">Date sold<input class="field" type="date" id="f_sdate"></label>
+        <label class="f s2 half">Sold for<input class="field money" type="number" step="0.01" min="0" inputmode="decimal" id="f_sprice" placeholder="0.00"></label>
+        <label class="f s2">Sold on<input class="field" id="f_ssite" list="siteList" placeholder="eBay"></label>
+        <label class="f s2 half">Platform fees<input class="field money" type="number" step="0.01" min="0" inputmode="decimal" id="f_fees" placeholder="0.00"></label>
+        <label class="f s2 half">Delivery<select class="field" id="f_method"><option value="ship">Shipped</option><option value="local">Local pickup</option></select></label>
+      </fieldset>
+
+      <fieldset id="shipSet">
+        <legend>Shipping</legend>
+        <label class="f s2 half">Carrier<select class="field" id="f_carrier"><option value="">—</option><option>USPS</option><option>UPS</option><option>FedEx</option><option>DHL</option><option>Other</option></select></label>
+        <label class="f s4">Tracking number<input class="field mono" id="f_tracking" autocomplete="off"></label>
+        <label class="f s2 half">Date shipped<input class="field" type="date" id="f_shipdate"></label>
+        <label class="f s2 half">Shipping cost (you paid)<input class="field money" type="number" step="0.01" min="0" inputmode="decimal" id="f_shipcost" placeholder="0.00"></label>
+        <label class="f s2">Shipping charged to buyer<input class="field money" type="number" step="0.01" min="0" inputmode="decimal" id="f_shipcharged" placeholder="0.00"></label>
+        <div class="track" id="trackLine" hidden></div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Profit</legend>
+        <div class="calc" id="calc"></div>
+      </fieldset>
+    </div>
+    <div class="sheet-foot">
+      <span class="sp" id="delWrap"></span>
+      <span class="err" id="saveErr" hidden></span>
+      <button class="btn" type="button" id="cancelBtn">Cancel</button>
+      <button class="btn primary" type="submit" id="saveBtn">Save item</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog class="sheet" id="labelSheet" aria-labelledby="labelTitle">
+  <form class="sheet-in" id="labelForm" novalidate>
+    <div class="sheet-head"><h2 id="labelTitle">Print labels</h2><button class="iconbtn" type="button" id="labelClose" aria-label="Close">✕</button></div>
+    <div class="sheet-body">
+      <fieldset>
+        <legend>Which items</legend>
+        <div class="opts" id="labelScope"></div>
+      </fieldset>
+      <fieldset>
+        <legend>Label size</legend>
+        <label class="f s6">Size<select class="field" id="labelSize"></select></label>
+        <div class="preview"><canvas id="labelPreview" width="10" height="10" aria-label="Label preview"></canvas><span class="fine">Print at 100% or "actual size". Use Scan in this app to find an item from its label.</span></div>
+        <label class="check"><input type="checkbox" id="labelMark" checked> Mark these items as labeled</label>
+      </fieldset>
+    </div>
+    <div class="sheet-foot"><span class="sp meta" id="labelCount"></span><span class="err" id="labelErr" hidden></span><button class="btn" type="button" id="labelCancel">Cancel</button><button class="btn primary" type="submit" id="labelGo">Make label PDF</button></div>
+  </form>
+</dialog>
+
+<dialog class="sheet" id="scanSheet" aria-labelledby="scanTitle">
+  <div class="sheet-in">
+    <div class="sheet-head"><h2 id="scanTitle">Scan a label</h2><button class="iconbtn" type="button" id="scanClose" aria-label="Close">✕</button></div>
+    <div class="scanbody">
+      <div class="scanwrap"><video id="scanVideo" playsinline muted autoplay></video><div class="reticle" aria-hidden="true"></div><div class="msg" id="scanMsg">Starting camera…</div></div>
+      <form class="scanmanual" id="scanManual" novalidate>
+        <input class="field mono" id="scanCode" placeholder="Or type an ID, e.g. RL-00012" autocapitalize="characters" autocomplete="off" aria-label="Item ID">
+        <button class="btn primary" type="submit">Find</button>
+      </form>
+    </div>
+  </div>
+</dialog>
+
+<datalist id="siteList"></datalist>
+<datalist id="locList"></datalist>
+<datalist id="catList"></datalist>
+
+<script src="vendor/supabase.js"></script>
+<script src="vendor/qrcode.js"></script>
+<script src="config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
